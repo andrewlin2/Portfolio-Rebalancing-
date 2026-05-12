@@ -1,0 +1,42 @@
+[
+  {
+    "action": "BUY",
+    "date": "2026-05-11T23:34:09.373488Z",
+    "dollar_amount": 14231.04,
+    "price": 292.67999267578125,
+    "shares": 48.6232,
+    "ticker": "AAPL"
+  },
+  {
+    "action": "SELL",
+    "date": "2026-05-11T23:34:09.373531Z",
+    "dollar_amount": 14231.04,
+    "price": 739.2999877929688,
+    "shares": 19.2493,
+    "ticker": "SPY"
+  },
+  {
+    "action": "BUY",
+    "date": "2026-05-12T00:56:16.703886Z",
+    "dollar_amount": 14231.04,
+    "price": 292.67999267578125,
+    "shares": 48.6232,
+    "ticker": "AAPL"
+  },
+  {
+    "action": "SELL",
+    "date": "2026-05-12T00:56:16.703928Z",
+    "dollar_amount": 14231.04,
+    "price": 739.2999877929688,
+    "shares": 19.2493,
+    "ticker": "SPY"
+  },
+  {
+    "action": "BUY",
+    "date": "2026-05-12T00:58:05.299642Z",
+    "dollar_amount": 4000.0,
+    "price": 200.0,
+    "shares": 20.0,
+    "ticker": "AAPL"
+  }
+]

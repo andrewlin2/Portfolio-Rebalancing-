@@ -1,9 +1,150 @@
 import yfinance as yf
 from typing import Dict, Tuple
+import json
+from datetime import datetime
 
 # Global portfolio storage
 portfolio = {}
 current_prices = {}
+transactions: list = []
+
+
+def _load_transactions(path: str = "transactions.json") -> list:
+    try:
+        with open(path, "r") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
+def _save_transactions(txns: list, path: str = "transactions.json") -> None:
+    with open(path, "w") as f:
+        json.dump(txns, f, indent=2, sort_keys=True)
+
+
+def get_rebalance_recommendations() -> Dict[str, Dict]:
+    """Compute recommended trades to rebalance portfolio to targets.
+
+    Returns mapping ticker -> {action, shares_change, dollar_change, price}
+    """
+    if not portfolio or not current_prices:
+        raise RuntimeError("portfolio or prices not set")
+
+    # compute holdings values and total value
+    holdings_value = {}
+    total_value = 0.0
+    for t, (qty, _) in portfolio.items():
+        price = float(current_prices.get(t, 0) or 0)
+        val = qty * price
+        holdings_value[t] = val
+        total_value += val
+
+    recommendations: Dict[str, Dict] = {}
+    for t, (qty, target_alloc) in portfolio.items():
+        price = float(current_prices.get(t, 0) or 0)
+        target_value = target_alloc * total_value
+        current_value = holdings_value.get(t, 0)
+        dollar_change = target_value - current_value
+        shares_change = (dollar_change / price) if price else 0.0
+        action = "none"
+        if abs(shares_change) >= 1e-12:
+            action = "BUY" if shares_change > 0 else "SELL"
+        recommendations[t] = {
+            "action": action,
+            "shares_change": shares_change,
+            "dollar_change": dollar_change,
+            "price": price,
+        }
+
+    return recommendations
+
+
+def execute_rebalance(record: bool = True, tx_path: str = "transactions.json") -> list:
+    """Execute recommended trades and optionally record transactions to disk.
+
+    Returns the list of transaction records appended.
+    """
+    recs = get_rebalance_recommendations()
+    txns = _load_transactions(tx_path)
+
+    for t, r in recs.items():
+        if r["action"] == "none":
+            continue
+        shares = r["shares_change"]
+        # update portfolio quantity
+        qty, target_alloc = portfolio[t]
+        new_qty = qty + shares
+        portfolio[t] = (new_qty, target_alloc)
+
+        txn = {
+            "date": datetime.utcnow().isoformat() + "Z",
+            "ticker": t,
+            "action": r["action"],
+            "shares": round(abs(shares), 4),
+            "dollar_amount": round(abs(r["dollar_change"]), 2),
+            "price": r["price"],
+        }
+        txns.append(txn)
+
+    if record:
+        _save_transactions(txns, tx_path)
+
+    return txns
+
+
+def execute_transaction(ticker: str, action: str, shares: float, price: float | None = None, record: bool = True, tx_path: str = "transactions.json") -> dict:
+    """Apply an arbitrary transaction to the portfolio and optionally record it.
+
+    - ticker: ticker symbol (case-insensitive)
+    - action: 'buy' or 'sell'
+    - shares: positive number of shares to buy/sell
+    - price: optional execution price; if None, will use current_prices[ticker]
+    Returns the transaction record dict.
+    """
+    t = ticker.upper()
+    if t not in portfolio:
+        raise KeyError(f"ticker {t} not in portfolio")
+
+    act = action.strip().lower()
+    if act not in ("buy", "sell"):
+        raise ValueError("action must be 'buy' or 'sell'")
+
+    if shares <= 0:
+        raise ValueError("shares must be positive")
+
+    exec_price = price
+    if exec_price is None:
+        exec_price = current_prices.get(t)
+        if exec_price is None:
+            raise RuntimeError(f"no price available for {t}; supply a price")
+
+    exec_price = float(exec_price)
+
+    # apply trade to portfolio
+    qty, target_alloc = portfolio[t]
+    if act == "buy":
+        new_qty = qty + shares
+    else:
+        new_qty = qty - shares
+    portfolio[t] = (new_qty, target_alloc)
+
+    dollar_amount = round(shares * exec_price, 2)
+    txn = {
+        "date": datetime.utcnow().isoformat() + "Z",
+        "ticker": t,
+        "action": act.upper(),
+        "shares": round(shares, 4),
+        "dollar_amount": dollar_amount,
+        "price": exec_price,
+    }
+
+    if record:
+        txns = _load_transactions(tx_path)
+        txns.append(txn)
+        _save_transactions(txns, tx_path)
+
+    return txn
+
 
 
 def set_portfolio(holdings: Dict[str, Tuple[float, float]]) -> None:
@@ -178,9 +319,9 @@ def main():
     print("=" * 50)
     print("Portfolio Rebalancer CLI")
     print("=" * 50)
-    
+
     threshold = 5.0
-    
+
     while True:
         print("\nOptions:")
         print("1. Set portfolio")
@@ -189,9 +330,11 @@ def main():
         print("4. Set custom threshold")
         print("5. View portfolio")
         print("6. Exit")
-        
-        choice = input("\nEnter choice (1-6): ").strip()
-        
+        print("7. Execute rebalance and record transactions")
+        print("8. Record an arbitrary transaction (buy/sell)")
+
+        choice = input("\nEnter choice (1-8): ").strip()
+
         if choice == '1':
             print("\nSet portfolio holdings (format: ticker quantity target_percent)")
             print("Example: SPY 20 0.50")
@@ -211,25 +354,25 @@ def main():
                     holdings[ticker] = (quantity, target)
                 except ValueError:
                     print("Invalid input. Please use: ticker quantity target_percent")
-            
+
             if holdings:
                 set_portfolio(holdings)
             else:
                 print("No holdings entered.")
-        
+
         elif choice == '2':
             if not portfolio:
                 print("Error: Portfolio not set. Use option 1 first.")
                 continue
             tickers = list(portfolio.keys())
             get_current_prices(tickers)
-        
+
         elif choice == '3':
             if not portfolio or not current_prices:
                 print("Error: Portfolio and prices not set.")
                 continue
             check_rebalance(threshold=threshold)
-        
+
         elif choice == '4':
             try:
                 new_threshold = float(input("Enter new threshold (%): "))
@@ -237,7 +380,7 @@ def main():
                 print(f"Threshold set to {threshold}%")
             except ValueError:
                 print("Invalid input. Please enter a number.")
-        
+
         elif choice == '5':
             if not portfolio:
                 print("Portfolio not set.")
@@ -250,13 +393,41 @@ def main():
                     for ticker, price in current_prices.items():
                         price_val = float(price)
                         print(f"  {ticker}: ${price_val:.2f}")
-        
+
         elif choice == '6':
             print("Goodbye!")
             break
-        
+
+        elif choice == '7':
+            # execute the rebalance and record transactions
+            if not portfolio or not current_prices:
+                print("Error: Portfolio and prices must be set before executing rebalance.")
+                continue
+            txns = execute_rebalance(record=True)
+            if txns:
+                print("Transactions recorded:")
+                for tx in txns[-10:]:  # show last up to 10 transactions
+                    print(f"  {tx['date']} - {tx['ticker']}: {tx['action']} ${tx['dollar_amount']:.2f} ({tx['shares']} shares) @ {tx['price']}")
+            else:
+                print("No transactions were necessary.")
+
+        elif choice == '8':
+            if not portfolio:
+                print("Error: Portfolio not set. Use option 1 first.")
+                continue
+            try:
+                t = input("Ticker: ").strip().upper()
+                a = input("Action (buy/sell): ").strip().lower()
+                s = float(input("Shares: ").strip())
+                p_in = input("Price (leave blank to use current price): ").strip()
+                p = float(p_in) if p_in else None
+                txn = execute_transaction(ticker=t, action=a, shares=s, price=p, record=True)
+                print(f"Recorded: {txn['date']} - {txn['ticker']} {txn['action']} ${txn['dollar_amount']:.2f} ({txn['shares']} shares) @ {txn['price']}")
+            except Exception as exc:
+                print(f"Error recording transaction: {exc}")
+
         else:
-            print("Invalid choice. Please enter 1-6.")
+            print("Invalid choice. Please enter 1-8.")
 
 
 if __name__ == "__main__":
