@@ -146,6 +146,50 @@ def execute_transaction(ticker: str, action: str, shares: float, price: float | 
     return txn
 
 
+def set_portfolio_weight_change(changes: Dict[str, float], normalize: bool = True) -> Dict[str, Tuple[float, float]]:
+    """Change the desired weights (target allocations) for tickers in the portfolio.
+
+    - changes: mapping ticker -> new weight (floats, need not sum to 1)
+    - normalize: if True, weights are normalized to sum to 1.
+
+    Only tickers already present in `portfolio` will be updated; others are ignored.
+    Returns the updated portfolio dict.
+    """
+    if not portfolio:
+        raise RuntimeError("portfolio not set")
+
+    # require that the user provided weights for all portfolio tickers
+    if not changes:
+        raise ValueError("no weight changes provided")
+
+    portfolio_tickers = set(portfolio.keys())
+    provided_tickers = {k.upper() for k in changes.keys()}
+    if portfolio_tickers != provided_tickers:
+        missing = portfolio_tickers - provided_tickers
+        extra = provided_tickers - portfolio_tickers
+        msg_parts = []
+        if missing:
+            msg_parts.append(f"missing tickers: {', '.join(sorted(missing))}")
+        if extra:
+            msg_parts.append(f"unknown tickers: {', '.join(sorted(extra))}")
+        raise ValueError("must provide weights for all portfolio tickers; " + "; ".join(msg_parts))
+
+    # validate and collect
+    new_weights: Dict[str, float] = {k.upper(): float(v) for k, v in changes.items()}
+
+    # require weights sum to 1
+    total = sum(new_weights.values())
+    tol = 1e-9
+    if abs(total - 1.0) > tol:
+        raise ValueError(f"provided weights must sum to 1. Got sum={total}")
+
+    # apply changes to portfolio entries; leave quantities unchanged
+    for t, (qty, _) in portfolio.items():
+        portfolio[t] = (qty, new_weights[t])
+
+    return portfolio
+
+
 
 def set_portfolio(holdings: Dict[str, Tuple[float, float]]) -> None:
     """
@@ -157,6 +201,22 @@ def set_portfolio(holdings: Dict[str, Tuple[float, float]]) -> None:
         }
         Example: {'AAPL': (10, 0.40), 'MSFT': (5, 0.30), 'CASH': (1000, 0.30)}
     """
+    # validate that target weights sum to 1
+    total = 0.0
+    for t, (_, target) in holdings.items():
+        try:
+            total += float(target)
+        except Exception:
+            raise ValueError(f"invalid target weight for {t}")
+    tol = 1e-9
+    if abs(total - 1.0) > tol:
+        raise ValueError(f"target allocations must sum to 1. Got sum={total}")
+
+    # validate tickers with yfinance before accepting
+    invalid = validate_tickers(list(holdings.keys()))
+    if invalid:
+        raise ValueError(f"unrecognized tickers: {', '.join(invalid)}")
+
     global portfolio
     portfolio = holdings
     print(f"Portfolio set with {len(holdings)} assets")
@@ -210,6 +270,48 @@ def get_current_prices(tickers: list) -> Dict[str, float]:
     except Exception as e:
         print(f"Error fetching prices: {e}")
         return {}
+
+
+def validate_tickers(tickers: list) -> list:
+    """Return a list of tickers that yfinance does NOT recognize.
+
+    For each ticker we try a short download; if no usable price is returned we
+    consider it invalid.
+    """
+    invalid = []
+    for t in tickers:
+        tt = str(t).upper()
+        try:
+            data = yf.download(tt, period="5d", progress=False)
+            if data is None or data.empty:
+                invalid.append(tt)
+                continue
+            # prefer Adj Close or Close
+            if isinstance(data, dict):
+                invalid.append(tt)
+                continue
+            # last row may be NaN for some tickers
+            last = None
+            for col in ("Adj Close", "Close"):
+                if col in data.columns:
+                    s = data[col].dropna()
+                    if not s.empty:
+                        last = s.iloc[-1]
+                        break
+            if last is None:
+                # try if single-column dataframe
+                try:
+                    lastrow = data.dropna(how="all").iloc[-1]
+                    # if lastrow is a Series with values
+                    if lastrow is None or (hasattr(lastrow, 'isnull') and lastrow.isnull().all()):
+                        invalid.append(tt)
+                        continue
+                except Exception:
+                    invalid.append(tt)
+                    continue
+        except Exception:
+            invalid.append(tt)
+    return invalid
 
 
 def check_rebalance(threshold: float = 5.0) -> Dict:
@@ -332,8 +434,9 @@ def main():
         print("6. Exit")
         print("7. Execute rebalance and record transactions")
         print("8. Record an arbitrary transaction (buy/sell)")
+        print("9. Set portfolio weight change")
 
-        choice = input("\nEnter choice (1-8): ").strip()
+        choice = input("\nEnter choice (1-9): ").strip()
 
         if choice == '1':
             print("\nSet portfolio holdings (format: ticker quantity target_percent)")
@@ -356,7 +459,14 @@ def main():
                     print("Invalid input. Please use: ticker quantity target_percent")
 
             if holdings:
-                set_portfolio(holdings)
+                try:
+                    invalid = validate_tickers(list(holdings.keys()))
+                    if invalid:
+                        print(f"Error: unrecognized tickers: {', '.join(invalid)}")
+                    else:
+                        set_portfolio(holdings)
+                except Exception as exc:
+                    print(f"Error setting portfolio: {exc}")
             else:
                 print("No holdings entered.")
 
@@ -376,10 +486,17 @@ def main():
         elif choice == '4':
             try:
                 new_threshold = float(input("Enter new threshold (%): "))
-                threshold = new_threshold
-                print(f"Threshold set to {threshold}%")
             except ValueError:
                 print("Invalid input. Please enter a number.")
+                continue
+
+            # enforce 0 <= threshold < 100
+            if not (0 <= new_threshold < 100):
+                print("Threshold must be >= 0 and less than 100%.")
+                continue
+
+            threshold = new_threshold
+            print(f"Threshold set to {threshold}%")
 
         elif choice == '5':
             if not portfolio:
@@ -426,8 +543,29 @@ def main():
             except Exception as exc:
                 print(f"Error recording transaction: {exc}")
 
+        elif choice == '9':
+            if not portfolio:
+                print("Portfolio not set. Use option 1 first.")
+                continue
+            print("Enter ticker and new weight (one per line), e.g. 'SPY 0.6'. Type 'done' when finished.")
+            changes: Dict[str, float] = {}
+            while True:
+                line = input("Ticker weight (or 'done'): ").strip()
+                if line.lower() == 'done':
+                    break
+                try:
+                    tk, wt = line.split()
+                    changes[tk.upper()] = float(wt)
+                except Exception:
+                    print("Invalid input. Use: TICKER weight")
+            try:
+                set_portfolio_weight_change(changes)
+                print("Portfolio weights updated.")
+            except Exception as exc:
+                print(f"Error updating weights: {exc}")
+
         else:
-            print("Invalid choice. Please enter 1-8.")
+            print("Invalid choice. Please enter 1-9.")
 
 
 if __name__ == "__main__":
