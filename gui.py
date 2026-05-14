@@ -121,7 +121,6 @@ HTML = """
       --shadow:    0 4px 24px rgba(0,0,0,.45);
     }
 
-    /* ── Reset & base ──────────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; }
     body {
@@ -329,7 +328,7 @@ HTML = """
     }
     .btn-success:hover { background: rgba(61,220,151,.22); }
 
-    /* ── Output / result area ──────────────────────────────────── */
+    /* ── Result area ───────────────────────────────────────────── */
     .result-block {
       background: var(--bg);
       border: 1px solid var(--border);
@@ -340,7 +339,36 @@ HTML = """
     }
     .result-block.hidden { display: none; }
 
-    /* ── Allocation / rebalance table ──────────────────────────── */
+    /* ── Ticker pill list ──────────────────────────────────────── */
+    .ticker-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px;
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: var(--radius-sm);
+      min-height: 44px;
+      align-items: center;
+    }
+    .ticker-pill {
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: .5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      background: rgba(201,168,76,.12);
+      color: var(--accent2);
+      border: 1px solid rgba(201,168,76,.25);
+    }
+    .ticker-pills-empty {
+      font-size: 12.5px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ── Allocation table ──────────────────────────────────────── */
     .alloc-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
     .alloc-table th {
       font-size: 11px;
@@ -374,7 +402,7 @@ HTML = """
     .tag-sell { background: rgba(240,96,112,.14); color: var(--red); }
     .tag-none { background: var(--surface2); color: var(--muted); }
 
-    /* ── Progress bar (allocation bar) ────────────────────────── */
+    /* ── Progress bar ──────────────────────────────────────────── */
     .bar-wrap {
       height: 6px;
       background: var(--border2);
@@ -436,18 +464,19 @@ HTML = """
     .tx-item .date { font-size: 11px; color: var(--muted); }
 
     /* ── Price chips ───────────────────────────────────────────── */
-    .price-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; }
+    .price-grid { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
     .price-chip {
       background: var(--bg);
       border: 1px solid var(--border2);
       border-radius: var(--radius-sm);
-      padding: 10px 16px;
+      padding: 12px 18px;
       display: flex;
       flex-direction: column;
       gap: 3px;
+      min-width: 110px;
     }
     .price-chip .sym { font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .8px; text-transform: uppercase; }
-    .price-chip .val { font-family: 'DM Mono', monospace; font-size: 18px; color: var(--accent2); }
+    .price-chip .val { font-family: 'DM Mono', monospace; font-size: 20px; color: var(--accent2); }
 
     /* ── Portfolio value hero ──────────────────────────────────── */
     .hero-val {
@@ -459,17 +488,6 @@ HTML = """
     .hero-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
     .hero-meta { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
 
-    /* ── Spinner ───────────────────────────────────────────────── */
-    .spin {
-      display: inline-block;
-      width: 14px; height: 14px;
-      border: 2px solid var(--border2);
-      border-top-color: var(--accent);
-      border-radius: 50%;
-      animation: spin .7s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
     /* ── Scrollbar ─────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -477,14 +495,12 @@ HTML = """
     ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
     /* ── Helpers ───────────────────────────────────────────────── */
-    .mono { font-family: 'DM Mono', monospace; }
+    .mono  { font-family: 'DM Mono', monospace; }
     .green { color: var(--green); }
     .red   { color: var(--red);   }
     .gold  { color: var(--accent2); }
     .muted { color: var(--muted); }
     .mt8   { margin-top: 8px; }
-    .sep   { height: 1px; background: var(--border); margin: 6px 0; }
-    .flex-between { display: flex; align-items: center; justify-content: space-between; }
   </style>
 </head>
 <body>
@@ -541,12 +557,12 @@ HTML = """
         <div class="card-desc">Define your holdings and target allocations. Weights must sum to exactly 1.0.</div>
 
         <div class="field-group">
-          <label>Holdings JSON</label>
-          <textarea id="holdings" spellcheck="false">{"SPY": [100, 0.5], "TLT": [50, 0.3], "GLD": [20, 0.2]}</textarea>
-        </div>
-        <div class="card-desc" style="margin-bottom:10px">
-          Format: <span class="mono gold">"TICKER": [quantity, target_weight]</span>
-          &nbsp;—&nbsp; weights must sum to <span class="mono gold">1.0</span>
+          <label>Assets</label>
+          <div id="portfolio-rows" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+            <button id="add-asset" class="btn-secondary">+ Add asset</button>
+            <div class="mono muted" style="font-size:12px">Ticker · Shares · Weight (0–1, must sum to 1.0)</div>
+          </div>
         </div>
 
         <div class="btn-row">
@@ -563,18 +579,21 @@ HTML = """
     <div class="panel" id="panel-prices">
       <div class="card">
         <div class="card-title">Live Prices</div>
-        <div class="card-desc">Fetch current market prices for your tickers via yFinance.</div>
-
-        <div class="field-group">
-          <label>Tickers (comma-separated)</label>
-          <input id="priceTickers" value="SPY,TLT,GLD" />
+        <div class="card-desc">
+          Fetches current market prices for every asset in your portfolio via yFinance.
+          Set up your portfolio first, then fetch prices here.
         </div>
 
-        <div class="btn-row">
+        <label style="display:block;margin-bottom:8px">Portfolio tickers</label>
+        <div class="ticker-pills" id="portfolioTickerPills">
+          <span class="ticker-pills-empty">No portfolio set — go to Setup first.</span>
+        </div>
+
+        <div class="btn-row" style="margin-top:16px">
           <button class="btn-primary" onclick="doGetPrices()">◈ Fetch Prices</button>
         </div>
 
-        <div id="priceChips" class="price-grid mt8"></div>
+        <div id="priceChips" class="price-grid"></div>
         <div class="banner" id="priceBanner"></div>
       </div>
     </div>
@@ -662,11 +681,12 @@ HTML = """
         <div class="card-desc">Update the target allocation for every portfolio ticker. All weights must sum to exactly 1.0.</div>
 
         <div class="field-group">
-          <label>Weights JSON</label>
-          <textarea id="weightsJson" spellcheck="false">{"SPY": 0.5, "TLT": 0.3, "GLD": 0.2}</textarea>
-        </div>
-        <div class="card-desc" style="margin-bottom:10px">
-          Format: <span class="mono gold">"TICKER": weight</span> — you must include every ticker currently in the portfolio.
+          <label>Weights</label>
+          <div id="weights-rows" style="display:flex;flex-direction:column;gap:8px"></div>
+          <div style="margin-top:8px; display:flex; gap:8px; align-items:center">
+            <button id="add-weight" class="btn-secondary">+ Add weight</button>
+            <div class="mono muted" style="font-size:12px">Ticker · Weight (0–1, must include every portfolio ticker)</div>
+          </div>
         </div>
 
         <div class="btn-row">
@@ -681,27 +701,26 @@ HTML = """
 </div><!-- /layout -->
 
 <script>
-/* ── Utility helpers ────────────────────────────────────── */
-function setStatus(state, text) {
-  const dot  = document.getElementById('statusDot');
-  const span = document.getElementById('statusText');
-  dot.className  = 'status-dot ' + state;
-  span.textContent = text;
-}
+/* ── Global state ───────────────────────────────────────── */
+// Tracks tickers currently in the portfolio so Prices panel stays in sync
+let portfolioTickers = [];
 
+/* ── Status helpers ─────────────────────────────────────── */
+function setStatus(state, text) {
+  document.getElementById('statusDot').className = 'status-dot ' + state;
+  document.getElementById('statusText').textContent = text;
+}
 function showBanner(id, type, msg) {
   const el = document.getElementById(id);
   el.className = 'banner show ' + type;
   el.textContent = msg;
   setTimeout(() => { el.className = 'banner'; }, 6000);
 }
-
 function busy(label) { setStatus('busy', label); }
-function idle()       { setStatus('',     'Idle'); }
+function idle()       { setStatus('', 'Idle'); }
 function done(ok)     { setStatus(ok ? 'ok' : 'err', ok ? 'Ready' : 'Error'); setTimeout(idle, 3000); }
-
-function fmt$(n) { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
-function fmtPct(n) { return Number(n).toFixed(2) + '%'; }
+function fmt$(n)      { return '$' + Number(n).toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2}); }
+function fmtPct(n)    { return Number(n).toFixed(2) + '%'; }
 
 /* ── Navigation ─────────────────────────────────────────── */
 function switchPanel(id, el) {
@@ -709,24 +728,72 @@ function switchPanel(id, el) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('panel-' + id).classList.add('active');
   el.classList.add('active');
+  // Refresh pill display whenever user opens the Prices panel
+  if (id === 'prices') refreshTickerPills();
+}
+
+/* ── Ticker pill display ────────────────────────────────── */
+function refreshTickerPills() {
+  const container = document.getElementById('portfolioTickerPills');
+  if (portfolioTickers.length === 0) {
+    container.innerHTML = '<span class="ticker-pills-empty">No portfolio set — go to Setup first.</span>';
+  } else {
+    container.innerHTML = portfolioTickers.map(t =>
+      `<span class="ticker-pill">${t}</span>`
+    ).join('');
+  }
 }
 
 /* ── SETUP ──────────────────────────────────────────────── */
 async function doSetPortfolio() {
-  const raw = document.getElementById('holdings').value.trim();
+  const rows = Array.from(document.getElementById('portfolio-rows').querySelectorAll('.row'));
+  const obj = {};
+  for (const r of rows) {
+    const t = r.querySelector('.p-ticker').value.trim().toUpperCase();
+    const s = r.querySelector('.p-shares').value.trim();
+    const w = r.querySelector('.p-weight').value.trim();
+    if (!t) continue;
+    obj[t] = [parseFloat(s) || 0, parseFloat(w) || 0];
+  }
+  if (Object.keys(obj).length === 0) {
+    showBanner('setupBanner', 'err', '✖ No assets provided.');
+    return;
+  }
   busy('Setting portfolio…');
-  const res = await window.pywebview.api.set_portfolio(raw);
+  const res = await window.pywebview.api.set_portfolio(JSON.stringify(obj));
   done(!res.error);
   if (res.error) {
     showBanner('setupBanner', 'err', '✖ ' + res.error);
     document.getElementById('setupResult').classList.add('hidden');
   } else {
-    showBanner('setupBanner', 'ok', '✔ Portfolio set — ' + Object.keys(res.portfolio).length + ' assets loaded.');
+    // Update global ticker list so Prices panel reflects the new portfolio
+    portfolioTickers = Object.keys(res.portfolio);
+    showBanner('setupBanner', 'ok', '✔ Portfolio set — ' + portfolioTickers.length + ' assets loaded.');
     const el = document.getElementById('setupResult');
     el.classList.remove('hidden');
     el.innerHTML = renderPortfolioTable(res.portfolio);
   }
 }
+
+function addPortfolioRow(ticker='', shares='', weight='') {
+  const cont = document.getElementById('portfolio-rows');
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center';
+  row.innerHTML = `
+    <input class='p-ticker' placeholder='TICKER'       value='${ticker}' style='width:130px' />
+    <input class='p-shares' placeholder='shares'       value='${shares}' style='width:130px' type='number' min='0' step='0.0001' />
+    <input class='p-weight' placeholder='weight (0–1)' value='${weight}' style='width:140px' type='number' min='0' max='1' step='0.01' />
+    <button class='btn-secondary' style='min-width:76px'>Remove</button>
+  `;
+  row.querySelector('button').onclick = () => row.remove();
+  cont.appendChild(row);
+}
+
+function clearPortfolioRows() { document.getElementById('portfolio-rows').innerHTML = ''; }
+
+document.getElementById('add-asset').addEventListener('click', e => { e.preventDefault(); addPortfolioRow(); });
+addPortfolioRow(); // start with one blank row
 
 function renderPortfolioTable(port) {
   let rows = '';
@@ -735,9 +802,7 @@ function renderPortfolioTable(port) {
       <td class="gold" style="font-weight:500">${ticker}</td>
       <td>${Number(qty).toLocaleString()}</td>
       <td>${fmtPct(wt * 100)}</td>
-      <td>
-        <div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(wt*100,100)}%"></div></div>
-      </td>
+      <td><div class="bar-wrap"><div class="bar-fill" style="width:${Math.min(wt*100,100)}%"></div></div></td>
     </tr>`;
   }
   return `<table class="alloc-table">
@@ -747,15 +812,21 @@ function renderPortfolioTable(port) {
 }
 
 function insertExample() {
-  document.getElementById('holdings').value =
-    JSON.stringify({"SPY":[100,0.5],"TLT":[50,0.3],"GLD":[20,0.2]}, null, 2);
+  clearPortfolioRows();
+  addPortfolioRow('SPY', '100', '0.5');
+  addPortfolioRow('TLT', '50',  '0.3');
+  addPortfolioRow('GLD', '20',  '0.2');
 }
 
 /* ── PRICES ─────────────────────────────────────────────── */
 async function doGetPrices() {
-  const csv = document.getElementById('priceTickers').value.trim();
+  if (portfolioTickers.length === 0) {
+    showBanner('priceBanner', 'err', '✖ No portfolio set. Go to Setup and set your portfolio first.');
+    return;
+  }
   busy('Fetching prices…');
-  const res = await window.pywebview.api.get_prices(csv);
+  // Always use the tickers from the portfolio — no manual input
+  const res = await window.pywebview.api.get_prices(portfolioTickers.join(','));
   done(!res.error);
   const chips = document.getElementById('priceChips');
   if (res.error) {
@@ -788,7 +859,6 @@ async function doCheck() {
   const needsColor = res.needs_rebalance ? 'red' : 'green';
   const needsLabel = res.needs_rebalance ? '⚠ Rebalance needed' : '✔ Portfolio is balanced';
 
-  // Build allocation rows
   let rows = '';
   for (const ticker of Object.keys(res.current_allocations)) {
     const cur  = res.current_allocations[ticker];
@@ -800,20 +870,15 @@ async function doCheck() {
       <td>${fmtPct(cur)}</td>
       <td>${fmtPct(tgt)}</td>
       <td class="${over ? 'red' : 'green'}" style="font-weight:${over?'600':'400'}">${fmtPct(diff)}</td>
-      <td>
-        <div class="bar-wrap" style="width:120px">
-          <div class="bar-fill ${over?'over':''}" style="width:${Math.min(cur,100)}%"></div>
-        </div>
-      </td>
+      <td><div class="bar-wrap" style="width:120px"><div class="bar-fill ${over?'over':''}" style="width:${Math.min(cur,100)}%"></div></div></td>
     </tr>`;
   }
 
-  // Build recommendation rows (if any)
   let recRows = '';
   if (res.recommendations) {
     for (const [ticker, r] of Object.entries(res.recommendations)) {
       if (r.action === 'none') continue;
-      const cls = r.action === 'BUY' ? 'buy' : 'sell';
+      const cls  = r.action === 'BUY' ? 'buy' : 'sell';
       const sign = r.action === 'BUY' ? '+' : '−';
       recRows += `<tr>
         <td class="gold" style="font-weight:500">${ticker}</td>
@@ -826,32 +891,32 @@ async function doCheck() {
   }
 
   out.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:12px;margin-top:18px">
       <div>
         <div class="hero-label">Portfolio Value</div>
         <div class="hero-val">${fmt$(res.portfolio_value)}</div>
         <div class="hero-meta">Threshold: ${fmtPct(thr)}</div>
       </div>
       <div style="font-size:15px;font-weight:600;padding:10px 18px;border-radius:8px;
-                  background:${res.needs_rebalance ? 'rgba(240,96,112,.1)':'rgba(61,220,151,.1)'};
-                  border:1px solid ${res.needs_rebalance ? 'rgba(240,96,112,.25)':'rgba(61,220,151,.25)'};
+                  background:${res.needs_rebalance?'rgba(240,96,112,.1)':'rgba(61,220,151,.1)'};
+                  border:1px solid ${res.needs_rebalance?'rgba(240,96,112,.25)':'rgba(61,220,151,.25)'};
                   color:var(--${needsColor})">
         ${needsLabel}
       </div>
     </div>
-
     <div class="card-title" style="margin-bottom:8px">Allocations</div>
     <table class="alloc-table" style="margin-bottom:22px">
       <thead><tr><th>Ticker</th><th>Current</th><th>Target</th><th>Drift</th><th>Bar</th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
-
-    ${recRows ? `<div class="card-title" style="margin-bottom:8px">Recommended Trades</div>
-    <table class="alloc-table">
-      <thead><tr><th>Ticker</th><th>Action</th><th>$ Amount</th><th>Shares</th><th>@ Price</th></tr></thead>
-      <tbody>${recRows}</tbody>
-    </table>` : '<div class="muted" style="font-size:13px;margin-top:8px">No trades recommended — all assets within threshold.</div>'}
-  `;
+    ${recRows
+      ? `<div class="card-title" style="margin-bottom:8px">Recommended Trades</div>
+         <table class="alloc-table">
+           <thead><tr><th>Ticker</th><th>Action</th><th>$ Amount</th><th>Shares</th><th>@ Price</th></tr></thead>
+           <tbody>${recRows}</tbody>
+         </table>`
+      : '<div class="muted" style="font-size:13px;margin-top:8px">No trades recommended — all assets within threshold.</div>'
+    }`;
 }
 
 /* ── EXECUTE ─────────────────────────────────────────────── */
@@ -888,22 +953,20 @@ async function doExecute() {
 
 /* ── TRANSACTION ─────────────────────────────────────────── */
 async function doTransaction() {
-  const ticker  = document.getElementById('txTicker').value.trim().toUpperCase();
-  const action  = document.getElementById('txAction').value;
-  const shares  = parseFloat(document.getElementById('txShares').value);
-  const priceRaw= document.getElementById('txPrice').value.trim();
-  const price   = priceRaw ? parseFloat(priceRaw) : null;
+  const ticker   = document.getElementById('txTicker').value.trim().toUpperCase();
+  const action   = document.getElementById('txAction').value;
+  const shares   = parseFloat(document.getElementById('txShares').value);
+  const priceRaw = document.getElementById('txPrice').value.trim();
+  const price    = priceRaw ? parseFloat(priceRaw) : null;
 
   if (!ticker || isNaN(shares) || shares <= 0) {
     showBanner('txBanner', 'err', '✖ Please enter a valid ticker and share count.');
     return;
   }
-
   busy('Recording transaction…');
   const res = await window.pywebview.api.execute_transaction(ticker, action, shares, price);
   done(!res.error);
   const out = document.getElementById('txResult');
-
   if (res.error) {
     showBanner('txBanner', 'err', '✖ ' + res.error);
     out.innerHTML = '';
@@ -924,9 +987,20 @@ async function doTransaction() {
 
 /* ── WEIGHTS ─────────────────────────────────────────────── */
 async function doSetWeights() {
-  const raw = document.getElementById('weightsJson').value.trim();
+  const rows = Array.from(document.getElementById('weights-rows').querySelectorAll('.row'));
+  const obj = {};
+  for (const r of rows) {
+    const t = r.querySelector('.w-ticker').value.trim().toUpperCase();
+    const w = r.querySelector('.w-weight').value.trim();
+    if (!t) continue;
+    obj[t] = parseFloat(w) || 0;
+  }
+  if (Object.keys(obj).length === 0) {
+    showBanner('weightsBanner', 'err', '✖ No weights provided.');
+    return;
+  }
   busy('Updating weights…');
-  const res = await window.pywebview.api.set_weights(raw);
+  const res = await window.pywebview.api.set_weights(JSON.stringify(obj));
   done(!res.error);
   if (res.error) {
     showBanner('weightsBanner', 'err', '✖ ' + res.error);
@@ -934,6 +1008,23 @@ async function doSetWeights() {
     showBanner('weightsBanner', 'ok', '✔ Target weights updated successfully.');
   }
 }
+
+function addWeightRow(ticker='', weight='') {
+  const cont = document.getElementById('weights-rows');
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center';
+  row.innerHTML = `
+    <input class='w-ticker' placeholder='TICKER'       value='${ticker}' style='width:200px' />
+    <input class='w-weight' placeholder='weight (0–1)' value='${weight}' style='width:140px' type='number' min='0' max='1' step='0.01' />
+    <button class='btn-secondary' style='min-width:76px'>Remove</button>
+  `;
+  row.querySelector('button').onclick = () => row.remove();
+  cont.appendChild(row);
+}
+
+document.getElementById('add-weight').addEventListener('click', e => { e.preventDefault(); addWeightRow(); });
+addWeightRow();
 </script>
 </body>
 </html>

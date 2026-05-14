@@ -314,6 +314,14 @@ def validate_tickers(tickers: list) -> list:
     return invalid
 
 
+def get_portfolio() -> dict:
+    """Return the current portfolio as a serializable dict {ticker: [quantity, target]}.
+
+    GUI uses this to get the tickers to fetch prices for.
+    """
+    return {k: [v[0], v[1]] for k, v in portfolio.items()}
+
+
 def check_rebalance(threshold: float = 5.0) -> Dict:
     """
     Check if portfolio needs rebalancing based on threshold.
