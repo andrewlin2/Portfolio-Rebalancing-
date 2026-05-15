@@ -3,6 +3,8 @@ name: Python CI
 on:
   push:
     branches: [ main ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ main ]
 
@@ -11,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.11, 3.12]
+        python-version: ["3.11", "3.12"]    # ✅ quoted to prevent float parsing
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,13 +32,12 @@ jobs:
         run: python -m compileall .
 
       - name: Run basic smoke test
-        run: |
-          python -c "import Rebalancer; print('Imported Rebalancer OK')"
+        run: python -c "import Rebalancer; print('Imported Rebalancer OK')"
 
   create-dmg:
-    # run after the main build to produce a macOS DMG artifact
     needs: build
     runs-on: macos-latest
+    if: startsWith(github.ref, 'refs/tags/v')   # ✅ only runs on version tags
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,7 +45,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: 3.11
+          python-version: "3.11"              # ✅ quoted
 
       - name: Install dependencies
         run: |
@@ -54,13 +55,11 @@ jobs:
       - name: Prepare DMG contents
         run: |
           mkdir -p dist/Portfolio-Rebalancing
-          # copy project files - adjust as needed
           cp README.md dist/Portfolio-Rebalancing/ || true
           cp Rebalancer.py dist/Portfolio-Rebalancing/ || true
           cp gui.py dist/Portfolio-Rebalancing/ || true
           cp requirements.txt dist/Portfolio-Rebalancing/ || true
           if [ -f transactions.json ]; then cp transactions.json dist/Portfolio-Rebalancing/ || true; fi
-          # make a small launcher script for convenience
           cat > dist/Portfolio-Rebalancing/run-rebalancer.sh <<'EOF'
           #!/bin/bash
           set -euo pipefail
@@ -74,18 +73,45 @@ jobs:
           PKG_NAME="Portfolio-Rebalancing"
           SRC_FOLDER="dist/Portfolio-Rebalancing"
           DMG_PATH="dist/${PKG_NAME}.dmg"
-          # ensure folder exists and show diagnostics
           mkdir -p "$SRC_FOLDER"
           echo "Listing contents of dist before packaging:"
           ls -la dist || true
-          # remove any previous artifact
           rm -f "$DMG_PATH"
-          # create the DMG from the relative folder (checkout makes workspace root current dir)
           hdiutil create -volname "$PKG_NAME" -srcfolder "$SRC_FOLDER" -ov -format UDZO "$DMG_PATH"
           echo "DMG created at: $DMG_PATH"
 
-      - name: Upload DMG artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload DMG to GitHub Release    # ✅ attaches to Release page
+        uses: softprops/action-gh-release@v2
         with:
-          name: portfolio-dmg
-          path: dist/Portfolio-Rebalancing.dmg
+          files: dist/Portfolio-Rebalancing.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-exe:
+    needs: build
+    runs-on: windows-latest
+    if: startsWith(github.ref, 'refs/tags/v')   # ✅ only runs on version tags
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"              # ✅ quoted
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: pyinstaller --onefile --windowed Rebalancer.py
+
+      - name: Upload EXE to GitHub Release    # ✅ attaches to Release page
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Rebalancer.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
