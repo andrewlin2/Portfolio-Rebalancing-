@@ -32,3 +32,54 @@ jobs:
       - name: Run basic smoke test
         run: |
           python -c "import Rebalancer; print('Imported Rebalancer OK')"
+
+  create-dmg:
+    # run after the main build to produce a macOS DMG artifact
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Prepare DMG contents
+        run: |
+          mkdir -p dist/Portfolio-Rebalancing
+          # copy project files - adjust as needed
+          cp README.md dist/Portfolio-Rebalancing/ || true
+          cp Rebalancer.py dist/Portfolio-Rebalancing/ || true
+          cp gui.py dist/Portfolio-Rebalancing/ || true
+          cp requirements.txt dist/Portfolio-Rebalancing/ || true
+          if [ -f transactions.json ]; then cp transactions.json dist/Portfolio-Rebalancing/ || true; fi
+          # make a small launcher script for convenience
+          cat > dist/Portfolio-Rebalancing/run-rebalancer.sh <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          python Rebalancer.py
+          EOF
+          chmod +x dist/Portfolio-Rebalancing/run-rebalancer.sh
+
+      - name: Create DMG
+        run: |
+          PKG_NAME="Portfolio-Rebalancing"
+          DMG_PATH="${{ runner.workspace }}/dist/${PKG_NAME}.dmg"
+          SRC_FOLDER="${{ runner.workspace }}/dist/Portfolio-Rebalancing"
+          # ensure no leftover
+          rm -f "$DMG_PATH"
+          hdiutil create -volname "$PKG_NAME" -srcfolder "$SRC_FOLDER" -ov -format UDZO "$DMG_PATH"
+          echo "DMG created at: $DMG_PATH"
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: portfolio-dmg
+          path: dist/Portfolio-Rebalancing.dmg
