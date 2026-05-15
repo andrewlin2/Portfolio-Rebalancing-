@@ -70,11 +70,17 @@ jobs:
 
       - name: Create DMG
         run: |
+          set -euxo pipefail
           PKG_NAME="Portfolio-Rebalancing"
-          DMG_PATH="${{ runner.workspace }}/dist/${PKG_NAME}.dmg"
-          SRC_FOLDER="${{ runner.workspace }}/dist/Portfolio-Rebalancing"
-          # ensure no leftover
+          SRC_FOLDER="dist/Portfolio-Rebalancing"
+          DMG_PATH="dist/${PKG_NAME}.dmg"
+          # ensure folder exists and show diagnostics
+          mkdir -p "$SRC_FOLDER"
+          echo "Listing contents of dist before packaging:"
+          ls -la dist || true
+          # remove any previous artifact
           rm -f "$DMG_PATH"
+          # create the DMG from the relative folder (checkout makes workspace root current dir)
           hdiutil create -volname "$PKG_NAME" -srcfolder "$SRC_FOLDER" -ov -format UDZO "$DMG_PATH"
           echo "DMG created at: $DMG_PATH"
 
