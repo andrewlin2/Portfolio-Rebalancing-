@@ -166,5 +166,21 @@
     "price": 430.5,
     "shares": 68.021,
     "ticker": "GLD"
+  },
+  {
+    "action": "BUY",
+    "date": "2026-05-15T18:04:42.057100Z",
+    "dollar_amount": 1410.6,
+    "price": 743.10009765625,
+    "shares": 1.8983,
+    "ticker": "SPY"
+  },
+  {
+    "action": "SELL",
+    "date": "2026-05-15T18:04:42.057175Z",
+    "dollar_amount": 1410.6,
+    "price": 418.57000732421875,
+    "shares": 3.37,
+    "ticker": "GLD"
   }
 ]

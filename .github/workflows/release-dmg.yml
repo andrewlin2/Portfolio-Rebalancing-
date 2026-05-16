@@ -1,0 +1,65 @@
+name: Build DMG and attach to Release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-upload-dmg:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Prepare DMG contents
+        run: |
+          mkdir -p dist/Portfolio-Rebalancing
+          cp README.md dist/Portfolio-Rebalancing/ || true
+          cp Rebalancer.py dist/Portfolio-Rebalancing/ || true
+          cp gui.py dist/Portfolio-Rebalancing/ || true
+          cp requirements.txt dist/Portfolio-Rebalancing/ || true
+          if [ -f transactions.json ]; then cp transactions.json dist/Portfolio-Rebalancing/ || true; fi
+          cat > dist/Portfolio-Rebalancing/run-rebalancer.sh <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          python Rebalancer.py
+          EOF
+          chmod +x dist/Portfolio-Rebalancing/run-rebalancer.sh
+
+      - name: Create DMG
+        run: |
+          set -euxo pipefail
+          PKG_NAME="Portfolio-Rebalancing"
+          SRC_FOLDER="dist/Portfolio-Rebalancing"
+          DMG_PATH="dist/${PKG_NAME}.dmg"
+          mkdir -p "$SRC_FOLDER"
+          echo "Listing dist contents before packaging:"
+          ls -la dist || true
+          rm -f "$DMG_PATH"
+          hdiutil create -volname "$PKG_NAME" -srcfolder "$SRC_FOLDER" -ov -format UDZO "$DMG_PATH"
+          echo "DMG created at: $DMG_PATH"
+
+      - name: Upload to GitHub Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: dist/Portfolio-Rebalancing.dmg
+          asset_name: Portfolio-Rebalancing-${{ github.event.release.tag_name }}.dmg
+          asset_content_type: application/x-apple-diskimage
