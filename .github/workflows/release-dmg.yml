@@ -39,7 +39,7 @@ jobs:
           EOF
           chmod +x "$APP_DIR/Portfolio-Rebalancer"
           mkdir -p "dist/Portfolio-Rebalancing.app/Contents/Resources"
-          cp Rebalancer.py "dist/Portfolio-Rebalancing.app/Contents/Resources/" || true
+          cp gui.py "dist/Portfolio-Rebalancing.app/Contents/Resources/" || true
           cat > dist/Portfolio-Rebalancing.app/Contents/Info.plist <<'XML'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -69,6 +69,12 @@ jobs:
           rm -f "$DMG_PATH"
           hdiutil create -volname "$PKG_NAME" -srcfolder "$SRC_FOLDER" -ov -format UDZO "$DMG_PATH"
           echo "DMG created at: $DMG_PATH"
+
+      - name: Run bundled app for diagnostics
+        run: |
+          set -euxo pipefail
+          echo "Running the bundled app executable to capture runtime errors"
+          ./dist/Portfolio-Rebalancing.app/Contents/MacOS/Portfolio-Rebalancer || true
 
       - name: Upload to GitHub Release (action)
         id: upload_action

@@ -67,7 +67,7 @@ jobs:
           chmod +x "$APP_DIR/Portfolio-Rebalancer"
           # put resources (only what the app needs) into Resources
           mkdir -p "dist/Portfolio-Rebalancing.app/Contents/Resources"
-          cp Rebalancer.py "dist/Portfolio-Rebalancing.app/Contents/Resources/" || true
+          cp gui.py "dist/Portfolio-Rebalancing.app/Contents/Resources/" || true
           # minimal Info.plist so Finder recognizes as app
           cat > dist/Portfolio-Rebalancing.app/Contents/Info.plist <<'XML'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -99,6 +99,12 @@ jobs:
           # create DMG that contains only the .app bundle
           hdiutil create -volname "$PKG_NAME" -srcfolder "$SRC_FOLDER" -ov -format UDZO "$DMG_PATH"
           echo "DMG created at: $DMG_PATH"
+
+      - name: Run bundled app for diagnostics
+        run: |
+          set -euxo pipefail
+          echo "Running the bundled app executable to capture runtime errors"
+          ./dist/Portfolio-Rebalancing.app/Contents/MacOS/Portfolio-Rebalancer || true
 
       - name: Upload DMG to GitHub Release    # ✅ attaches to Release page
         uses: softprops/action-gh-release@v2
