@@ -118,5 +118,21 @@
     "price": 298.8699951171875,
     "shares": 36.707,
     "ticker": "AAPL"
+  },
+  {
+    "action": "BUY",
+    "date": "2026-05-16T06:14:07.971713Z",
+    "dollar_amount": 3465.9,
+    "price": 300.2300109863281,
+    "shares": 11.5441,
+    "ticker": "AAPL"
+  },
+  {
+    "action": "SELL",
+    "date": "2026-05-16T06:14:07.971731Z",
+    "dollar_amount": 3465.9,
+    "price": 739.1699829101562,
+    "shares": 4.6889,
+    "ticker": "SPY"
   }
 ]

@@ -1,0 +1,429 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build macOS app (pyinstaller)
+        run: |
+          pyinstaller --onedir --windowed --name "Portfolio-Rebalancing" gui.py
+
+      - name: Create DMG
+        run: |
+          mkdir -p dist/dmg
+          if [ -d "dist/Portfolio-Rebalancing.app" ]; then
+            cp -R dist/Portfolio-Rebalancing.app dist/dmg/
+          else
+            echo "dist/Portfolio-Rebalancing.app not found"; ls -la dist || true
+          fi
+          hdiutil create -volname "Portfolio-Rebalancing" -srcfolder dist/dmg -ov -format UDZO dist/Portfolio-Rebalancing.dmg
+
+      - name: Upload mac DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: dist/Portfolio-Rebalancing.dmg
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build Windows exe (pyinstaller)
+        shell: bash
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name PortfolioRebalancer gui.py
+
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/PortfolioRebalancer.exe
+
+  create-release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Mac DMG
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-dmg
+          path: ./artifacts/mac
+
+      - name: Download Windows EXE
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: ./artifacts/windows
+
+      - name: Create Release (attach artifacts)
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ./artifacts/mac/*.dmg
+            ./artifacts/windows/*.exe
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.0.0
+
+permissions:
+  contents: write  # Required to create releases and upload assets
+
+jobs:
+  name: Build and Release
+
+  on:
+    push:
+      tags:
+        - 'v*'  # triggers on version tags like v1.0.0
+
+  permissions:
+    contents: write
+
+  jobs:
+    build-mac:
+      runs-on: macos-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Set up Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: '3.11'
+
+        - name: Install dependencies
+          run: |
+            python -m pip install --upgrade pip
+            if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+            pip install pyinstaller
+
+        - name: Build GUI application for Mac
+          run: |
+            pyinstaller --onedir --windowed --name "Portfolio-Rebalancing" gui.py
+
+        - name: Create Mac DMG
+          run: |
+            mkdir -p dist/dmg
+            if [ -d "dist/Portfolio-Rebalancing.app" ]; then
+              cp -r dist/Portfolio-Rebalancing.app dist/dmg/
+            else
+              echo "Warning: expected dist/Portfolio-Rebalancing.app not found. Listing dist:"; ls -la dist || true
+            fi
+            hdiutil create -volname "Portfolio-Rebalancing" -srcfolder dist/dmg -ov -format UDZO dist/Portfolio-Rebalancing.dmg
+
+        - name: Upload Mac DMG
+          uses: actions/upload-artifact@v4
+          with:
+            name: mac-dmg
+            path: dist/Portfolio-Rebalancing.dmg
+            retention-days: 1
+
+    build-windows:
+      runs-on: windows-latest
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v4
+
+        - name: Set up Python
+          uses: actions/setup-python@v4
+          with:
+            python-version: '3.11'
+
+        - name: Install dependencies
+          run: |
+            python -m pip install --upgrade pip
+            if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+            pip install pyinstaller
+
+        - name: Build GUI application for Windows
+          shell: bash
+          run: |
+            pyinstaller --noconfirm --onefile --windowed --name PortfolioRebalancer gui.py
+
+        - name: Upload Windows EXE
+          uses: actions/upload-artifact@v4
+          with:
+            name: windows-exe
+            path: dist/PortfolioRebalancer.exe
+            retention-days: 1
+
+    create-release:
+      needs: [build-mac, build-windows]
+      runs-on: ubuntu-latest
+      steps:
+        - name: Download Mac DMG
+          uses: actions/download-artifact@v4
+          with:
+            name: mac-dmg
+            path: ./artifacts/mac
+
+        - name: Download Windows EXE
+          uses: actions/download-artifact@v4
+          with:
+            name: windows-exe
+            path: ./artifacts/windows
+
+        - name: Create Release
+          uses: softprops/action-gh-release@v1
+          with:
+            files: |
+              ./artifacts/mac/*.dmg
+              ./artifacts/windows/*.exe
+            name: Release ${{ github.ref_name }}
+            draft: false
+            prerelease: false
+          env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pyinstaller
+
+      - name: Build GUI application for Mac
+        run: |
+          pyinstaller --onedir --windowed --name "Portfolio-Rebalancing" gui.py
+
+      - name: Create Mac DMG
+        run: |
+          mkdir -p dist/dmg
+          # pyinstaller on mac should create a .app inside dist/<name>.app
+          if [ -d "dist/Portfolio-Rebalancing.app" ]; then
+            cp -r dist/Portfolio-Rebalancing.app dist/dmg/
+          else
+            echo "Warning: expected dist/Portfolio-Rebalancing.app not found. Listing dist:"; ls -la dist || true
+          fi
+          hdiutil create -volname "Portfolio-Rebalancing" -srcfolder dist/dmg -ov -format UDZO dist/Portfolio-Rebalancing.dmg
+
+      - name: Upload Mac DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: dist/Portfolio-Rebalancing.dmg
+          retention-days: 1
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install pyinstaller
+
+      - name: Build GUI application for Windows
+        shell: bash
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name PortfolioRebalancer gui.py
+
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/PortfolioRebalancer.exe
+          retention-days: 1
+
+  create-release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Mac DMG
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-dmg
+          path: ./artifacts/mac
+
+      - name: Download Windows EXE
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: ./artifacts/windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ./artifacts/mac/*.dmg
+            ./artifacts/windows/*.exe
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pywebview
+
+      - name: Build macOS app
+        run: |
+          pyinstaller --noconfirm --onedir --windowed \
+            --name "IntervalTrainer" \
+            --collect-all webview \
+            --hidden-import=webview \
+            gui.py
+
+      - name: Create DMG
+        run: |
+          mkdir -p dist/dmg
+          cp -R dist/IntervalTrainer.app dist/dmg/
+          hdiutil create \
+            -volname "IntervalTrainer" \
+            -srcfolder dist/dmg \
+            -ov \
+            -format UDZO \
+            dist/IntervalTrainer.dmg
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: mac-dmg
+          path: dist/IntervalTrainer.dmg
+          retention-days: 1
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pyinstaller pywebview
+
+      - name: Build Windows executable
+        shell: bash
+        run: |
+          pyinstaller --noconfirm --onefile --windowed \
+            --name "IntervalTrainer" \
+            --collect-all webview \
+            --hidden-import=webview \
+            gui.py
+
+      - name: Upload Windows EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/IntervalTrainer.exe
+          retention-days: 1
+
+  create-release:
+    needs: [build-mac, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Download macOS DMG
+        uses: actions/download-artifact@v4
+        with:
+          name: mac-dmg
+          path: ./artifacts/mac
+
+      - name: Download Windows EXE
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: ./artifacts/windows
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          files: |
+            ./artifacts/mac/IntervalTrainer.dmg
+            ./artifacts/windows/IntervalTrainer.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
