@@ -35,7 +35,7 @@ jobs:
           cat > "$APP_DIR/Portfolio-Rebalancer" <<'EOF'
           #!/bin/bash
           DIR="$(cd "$(dirname "$0")/.." && pwd)"
-          exec /usr/bin/env python "$DIR/../Resources/Rebalancer.py" "$@"
+          exec /usr/bin/env python "$DIR/Resources/Rebalancer.py" "$@"
           EOF
           chmod +x "$APP_DIR/Portfolio-Rebalancer"
           mkdir -p "dist/Portfolio-Rebalancing.app/Contents/Resources"

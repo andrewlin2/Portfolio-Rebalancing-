@@ -61,8 +61,8 @@ jobs:
           cat > "$APP_DIR/Portfolio-Rebalancer" <<'EOF'
           #!/bin/bash
           DIR="$(cd "$(dirname "$0")/.." && pwd)"
-          # run the bundled python file
-          exec /usr/bin/env python "$DIR/../Resources/Rebalancer.py" "$@"
+          # run the bundled python file from Contents/Resources
+          exec /usr/bin/env python "$DIR/Resources/Rebalancer.py" "$@"
           EOF
           chmod +x "$APP_DIR/Portfolio-Rebalancer"
           # put resources (only what the app needs) into Resources
