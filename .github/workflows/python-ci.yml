@@ -52,31 +52,51 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Prepare DMG contents
+      - name: Prepare macOS .app bundle
         run: |
-          mkdir -p dist/Portfolio-Rebalancing
-          cp README.md dist/Portfolio-Rebalancing/ || true
-          cp Rebalancer.py dist/Portfolio-Rebalancing/ || true
-          cp gui.py dist/Portfolio-Rebalancing/ || true
-          cp requirements.txt dist/Portfolio-Rebalancing/ || true
-          if [ -f transactions.json ]; then cp transactions.json dist/Portfolio-Rebalancing/ || true; fi
-          cat > dist/Portfolio-Rebalancing/run-rebalancer.sh <<'EOF'
+          set -euxo pipefail
+          APP_DIR="dist/Portfolio-Rebalancing.app/Contents/MacOS"
+          mkdir -p "$APP_DIR"
+          # create a small launcher executable that runs the python script
+          cat > "$APP_DIR/Portfolio-Rebalancer" <<'EOF'
           #!/bin/bash
-          set -euo pipefail
-          python Rebalancer.py
+          DIR="$(cd "$(dirname "$0")/.." && pwd)"
+          # run the bundled python file
+          exec /usr/bin/env python "$DIR/../Resources/Rebalancer.py" "$@"
           EOF
-          chmod +x dist/Portfolio-Rebalancing/run-rebalancer.sh
+          chmod +x "$APP_DIR/Portfolio-Rebalancer"
+          # put resources (only what the app needs) into Resources
+          mkdir -p "dist/Portfolio-Rebalancing.app/Contents/Resources"
+          cp Rebalancer.py "dist/Portfolio-Rebalancing.app/Contents/Resources/" || true
+          # minimal Info.plist so Finder recognizes as app
+          cat > dist/Portfolio-Rebalancing.app/Contents/Info.plist <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key>
+            <string>Portfolio-Rebalancing</string>
+            <key>CFBundleExecutable</key>
+            <string>Portfolio-Rebalancer</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.example.portfolio-rebalancing</string>
+            <key>CFBundleVersion</key>
+            <string>1.0</string>
+          </dict>
+          </plist>
+          XML
 
       - name: Create DMG
         run: |
           set -euxo pipefail
           PKG_NAME="Portfolio-Rebalancing"
-          SRC_FOLDER="dist/Portfolio-Rebalancing"
+          SRC_FOLDER="dist/Portfolio-Rebalancing.app"
           DMG_PATH="dist/${PKG_NAME}.dmg"
           mkdir -p "$SRC_FOLDER"
           echo "Listing contents of dist before packaging:"
           ls -la dist || true
           rm -f "$DMG_PATH"
+          # create DMG that contains only the .app bundle
           hdiutil create -volname "$PKG_NAME" -srcfolder "$SRC_FOLDER" -ov -format UDZO "$DMG_PATH"
           echo "DMG created at: $DMG_PATH"
 

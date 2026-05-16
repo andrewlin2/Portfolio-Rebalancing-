@@ -3,6 +3,7 @@ name: Build DMG and attach to Release
 on:
   release:
     types: [created]
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -26,26 +27,41 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Prepare DMG contents
+      - name: Prepare macOS .app bundle
         run: |
-          mkdir -p dist/Portfolio-Rebalancing
-          cp README.md dist/Portfolio-Rebalancing/ || true
-          cp Rebalancer.py dist/Portfolio-Rebalancing/ || true
-          cp gui.py dist/Portfolio-Rebalancing/ || true
-          cp requirements.txt dist/Portfolio-Rebalancing/ || true
-          if [ -f transactions.json ]; then cp transactions.json dist/Portfolio-Rebalancing/ || true; fi
-          cat > dist/Portfolio-Rebalancing/run-rebalancer.sh <<'EOF'
+          set -euxo pipefail
+          APP_DIR="dist/Portfolio-Rebalancing.app/Contents/MacOS"
+          mkdir -p "$APP_DIR"
+          cat > "$APP_DIR/Portfolio-Rebalancer" <<'EOF'
           #!/bin/bash
-          set -euo pipefail
-          python Rebalancer.py
+          DIR="$(cd "$(dirname "$0")/.." && pwd)"
+          exec /usr/bin/env python "$DIR/../Resources/Rebalancer.py" "$@"
           EOF
-          chmod +x dist/Portfolio-Rebalancing/run-rebalancer.sh
+          chmod +x "$APP_DIR/Portfolio-Rebalancer"
+          mkdir -p "dist/Portfolio-Rebalancing.app/Contents/Resources"
+          cp Rebalancer.py "dist/Portfolio-Rebalancing.app/Contents/Resources/" || true
+          cat > dist/Portfolio-Rebalancing.app/Contents/Info.plist <<'XML'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key>
+            <string>Portfolio-Rebalancing</string>
+            <key>CFBundleExecutable</key>
+            <string>Portfolio-Rebalancer</string>
+            <key>CFBundleIdentifier</key>
+            <string>com.example.portfolio-rebalancing</string>
+            <key>CFBundleVersion</key>
+            <string>1.0</string>
+          </dict>
+          </plist>
+          XML
 
       - name: Create DMG
         run: |
           set -euxo pipefail
           PKG_NAME="Portfolio-Rebalancing"
-          SRC_FOLDER="dist/Portfolio-Rebalancing"
+          SRC_FOLDER="dist/Portfolio-Rebalancing.app"
           DMG_PATH="dist/${PKG_NAME}.dmg"
           mkdir -p "$SRC_FOLDER"
           echo "Listing dist contents before packaging:"
@@ -54,7 +70,8 @@ jobs:
           hdiutil create -volname "$PKG_NAME" -srcfolder "$SRC_FOLDER" -ov -format UDZO "$DMG_PATH"
           echo "DMG created at: $DMG_PATH"
 
-      - name: Upload to GitHub Release
+      - name: Upload to GitHub Release (action)
+        id: upload_action
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -63,3 +80,22 @@ jobs:
           asset_path: dist/Portfolio-Rebalancing.dmg
           asset_name: Portfolio-Rebalancing-${{ github.event.release.tag_name }}.dmg
           asset_content_type: application/x-apple-diskimage
+
+      - name: Diagnose upload result and fallback
+        if: steps.upload_action.outcome != 'success'
+        run: |
+          echo "Upload action failed or didn't run; attempting REST API upload as fallback."
+          set -euxo pipefail
+          ASSET_PATH="dist/Portfolio-Rebalancing.dmg"
+          if [ ! -f "$ASSET_PATH" ]; then echo "Asset not found: $ASSET_PATH"; ls -la dist; exit 1; fi
+          # get upload_url from release info
+          UPLOAD_URL="${{ github.event.release.upload_url }}"
+          echo "Using upload_url: $UPLOAD_URL"
+          # expand upload_url (remove templated part if present)
+          UPLOAD_URL_EXPANDED="${UPLOAD_URL%%{*} }"
+          # use curl to upload
+          TAG_NAME="${{ github.event.release.tag_name }}"
+          FILE_NAME="Portfolio-Rebalancing-${TAG_NAME}.dmg"
+          echo "Uploading $ASSET_PATH as $FILE_NAME"
+          RESP=$(curl -sS -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" -H "Content-Type: application/octet-stream" --data-binary @"$ASSET_PATH" "${UPLOAD_URL_EXPANDED}?name=$FILE_NAME") || true
+          echo "Response: $RESP"
